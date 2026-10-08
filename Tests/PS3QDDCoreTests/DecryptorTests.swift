@@ -113,4 +113,23 @@ struct DecryptorTests {
             try Decryptor.scan(input: tinyURL)
         }
     }
+
+    /// A well-formed map can still name sectors past the end of the file, because the
+    /// boundaries are 32-bit values read straight out of it. Marking those sectors would
+    /// run off the end of the per-sector table, so they are rejected at scan time.
+    @Test func scanRejectsAMapThatReachesPastTheEndOfTheFile() throws {
+        let directory = try Temp.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        // 12 sectors on disk, but the map claims the encrypted run is 3 ..< 5000.
+        let header = RegionMapTests.header(boundaries: [2, 5000, 5002])
+        var bytes = [UInt8](repeating: 0, count: 12 * RegionMap.sectorSize)
+        bytes.replaceSubrange(0..<RegionMap.sectorSize, with: header)
+
+        let url = directory.appendingPathComponent("short.iso")
+        try Data(bytes).write(to: url)
+        #expect(throws: DecryptorError.notAPS3Image) {
+            try Decryptor.scan(input: url)
+        }
+    }
 }

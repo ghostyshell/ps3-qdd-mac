@@ -67,6 +67,14 @@ public enum Decryptor {
         } catch {
             throw DecryptorError.notAPS3Image
         }
+
+        // The boundaries come out of the file and can name anything up to 2^32, so they
+        // have to be held against the real length of the disc. Without this a short file
+        // carrying an oversized map sends the mark loop off the end of the mask.
+        let totalSectors = Int(size / Int64(RegionMap.sectorSize))
+        guard ranges.allSatisfy({ $0.start >= 0 && $0.end <= totalSectors }) else {
+            throw DecryptorError.notAPS3Image
+        }
         return DiscScan(totalBytes: size, encrypted: ranges)
     }
 
