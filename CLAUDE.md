@@ -46,6 +46,21 @@ Native macOS decryptor for Redump PS3 disc images. See `README.md` for what it d
   `DiscScan.init` is deliberately not public for the same reason.
 - **Never put key bytes in an error.** Errors reach the window and stderr, and a malformed
   line is usually a real key with one stray character in it.
+- **Scan the whole history, not the working tree, before publishing.** Real Redump keys
+  were committed in the first two commits and replaced by synthetic ones later. `HEAD` was
+  clean the entire time, and they still went public with the first push. List every hex
+  string in every commit and check each one by eye:
+
+  ```sh
+  for c in $(git rev-list --all); do
+      git grep -h -oE '[0-9A-Fa-f]{32}' "$c" -- . || true
+  done | sort -u
+  ```
+
+  Every hit should be a NIST SP 800-38A vector, one of the synthetic `A1B2...`, `B2C3...` or
+  `C3D4...` fixtures, or a published output hash. Anything else is a real key. The fixtures
+  also carry deliberately-short keys that this scan will not show, so read the test files
+  too.
 
 ## Conventions
 
