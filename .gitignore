@@ -1,0 +1,5 @@
+.build/
+.swiftpm/
+PS3QDD.app/
+.DS_Store
+*.part
