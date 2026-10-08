@@ -20,7 +20,9 @@ enum CLI {
             }
 
             try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-            let output = outputDirectory.appendingPathComponent(input.lastPathComponent)
+            // Same naming rule as the app: writing into the source's own folder would
+            // otherwise overwrite the input with its own output.
+            let output = DecryptQueue.outputURL(for: input, in: outputDirectory)
 
             let percent = Int((Double(scan.encryptedSectors) / Double(max(scan.totalSectors, 1))) * 100)
             note("\(input.lastPathComponent): \(scan.encrypted.count) encrypted region(s), "

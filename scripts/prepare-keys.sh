@@ -8,6 +8,11 @@
 # bsdtar ships with macOS and reads 7z natively, so no extra tools are needed.
 set -u
 
+# The key file is the whole point of the tool, and a wrong key corrupts an image silently
+# rather than failing, so nothing this script writes is readable by anyone but its owner.
+# Set once here so it covers the temp extraction directory as well as keys.txt.
+umask 077
+
 ARCHIVE=${1:-"$HOME/Code/ps3-aldostools-mirror/_staging/Resources/REDUMP_DKEY.7z"}
 DEST=${2:-"$HOME/Library/Application Support/PS3QDD/keys.txt"}
 
@@ -23,8 +28,8 @@ command -v bsdtar >/dev/null 2>&1 || die "bsdtar not found"
 WORK=$(mktemp -d) || die "could not create a temporary directory"
 trap 'rm -rf "$WORK"' EXIT INT TERM
 
-bsdtar -xf "$ARCHIVE" -C "$WORK" --include '*.dkey' 2>/dev/null \
-    || bsdtar -xf "$ARCHIVE" -C "$WORK" \
+bsdtar -xf "$ARCHIVE" -C "$WORK" --include '*.dkey' --no-same-owner --no-same-permissions 2>/dev/null \
+    || bsdtar -xf "$ARCHIVE" -C "$WORK" --no-same-owner --no-same-permissions \
     || die "could not extract $ARCHIVE"
 
 mkdir -p "$(dirname "$DEST")" || die "could not create $(dirname "$DEST")"
@@ -35,6 +40,9 @@ mkdir -p "$(dirname "$DEST")" || die "could not create $(dirname "$DEST")"
     find "$WORK" -type f -name '*.dkey' | while IFS= read -r file; do
         title=$(basename "$file" .dkey)
         key=$(tr -d '\r\n' < "$file")
+        # A title comes straight from the archive's filenames, so one containing a tab or
+        # a newline would inject extra fields, or a whole extra line, into keys.txt.
+        case "$title" in *[[:cntrl:]]*|"") continue ;; esac
         # Keep only well-formed entries: 32 hex characters and nothing else.
         case "$key" in
             *[!0-9A-Fa-f]*|"") continue ;;
@@ -43,6 +51,9 @@ mkdir -p "$(dirname "$DEST")" || die "could not create $(dirname "$DEST")"
         printf '%s\t%s\n' "$title" "$key"
     done | LC_ALL=C sort
 } > "$DEST" || die "could not write $DEST"
+
+# `>` keeps the mode of an existing file, so this is what tightens a file made before.
+chmod 600 "$DEST" || die "could not restrict permissions on $DEST"
 
 count=$(grep -c -v '^#' "$DEST" || true)
 [ "$count" -gt 0 ] || die "no usable keys found in $ARCHIVE"

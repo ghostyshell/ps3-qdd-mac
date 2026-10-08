@@ -83,6 +83,9 @@ below runs:
 ./run.sh --decrypt <input.iso> <keys-file-or-dkey-folder> <output-dir>
 ```
 
+The output keeps the input's name, except when the output folder is the input's own
+folder, where it becomes `<name>_decrypted.iso` so the source is never overwritten.
+
 ## How it works
 
 A PS3 disc image is 2048-byte sectors. Sector 0 holds a region map, and the regions
@@ -101,9 +104,11 @@ parallelizes across cores with no chaining.
 swift test
 ```
 
-31 tests covering the NIST SP 800-38A CBC vector, region-map arithmetic against the real
-disc layout and malformed maps, `.dkey` CRLF trimming, key lookup, and a synthesized
-round-trip that encrypts an image and decrypts it back byte for byte.
+33 tests covering the NIST SP 800-38A CBC vector, region-map arithmetic against the real
+disc layout and against malformed maps (including one that names sectors past the end of
+the file), `.dkey` CRLF trimming, key lookup, refusing a directory at the output path, and
+a synthesized round-trip that encrypts an image and decrypts it back byte for byte. The
+keys in the fixtures are synthetic; no real disc key is committed here.
 
 Verified end to end against
 `LittleBigPlanet (USA) (En,Ja,Fr,De,Es,It,Nl,Pt,Sv,No,Da,Fi,Zh,Ko) (v02.00).iso`:

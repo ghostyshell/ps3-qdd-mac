@@ -10,6 +10,7 @@ public enum DecryptorError: Error, Equatable {
     case writeFailed(offset: Int64, code: Int32)
     case insufficientSpace(needed: Int64, available: Int64)
     case cancelled
+    case decryptionFailed(status: Int32)
 }
 
 /// What a disc image looks like from the outside, before any decryption happens.
@@ -17,7 +18,9 @@ public struct DiscScan: Sendable {
     public let totalBytes: Int64
     public let encrypted: [SectorRange]
 
-    public init(totalBytes: Int64, encrypted: [SectorRange]) {
+    /// Internal, not public. `Decryptor.scan` is the only thing that knows to hold these
+    /// ranges against the real file length, and a hand-built scan would skip that check.
+    init(totalBytes: Int64, encrypted: [SectorRange]) {
         self.totalBytes = totalBytes
         self.encrypted = encrypted
     }
@@ -94,6 +97,10 @@ public enum Decryptor {
     ) throws {
         let fileManager = FileManager.default
         let partURL = output.appendingPathExtension("part")
+        // Both paths are checked before any work starts, so a directory sitting where the
+        // output belongs is refused immediately rather than after a full decrypt.
+        try requireNotDirectory(at: partURL)
+        try requireNotDirectory(at: output)
         try? fileManager.removeItem(at: partURL)
 
         try checkFreeSpace(for: output, needed: scan.totalBytes)
@@ -110,6 +117,8 @@ public enum Decryptor {
         defer {
             if inOpen { try? inHandle.close() }
             if outOpen { try? outHandle.close() }
+            // The part file is this function's own creation, so it is safe to remove
+            // whatever it turned out to be.
             if !finished { try? fileManager.removeItem(at: partURL) }
         }
 
@@ -147,6 +156,7 @@ public enum Decryptor {
             var buffer = [UInt8](data)
             var scratch = [UInt8](repeating: 0, count: byteCount)
             let firstSector = sectorIndex
+            let failures = FailureBox()
 
             buffer.withUnsafeMutableBufferPointer { bufferPointer in
                 scratch.withUnsafeMutableBufferPointer { scratchPointer in
@@ -170,12 +180,20 @@ public enum Decryptor {
                                 )
                             }
                         }
-                        if status == CCCryptorStatus(kCCSuccess) {
-                            (source.pointer + offset * sectorSize)
-                                .update(from: destination.pointer + offset * sectorSize, count: sectorSize)
+                        guard status == CCCryptorStatus(kCCSuccess) else {
+                            // Copying nothing back would write the ciphertext through and
+                            // call it a success, so the chunk is abandoned instead.
+                            failures.record(status)
+                            return
                         }
+                        (source.pointer + offset * sectorSize)
+                            .update(from: destination.pointer + offset * sectorSize, count: sectorSize)
                     }
                 }
+            }
+
+            if let status = failures.firstFailure {
+                throw DecryptorError.decryptionFailed(status: status)
             }
 
             do {
@@ -208,9 +226,23 @@ public enum Decryptor {
         try inHandle.close()
         inOpen = false
 
+        try requireNotDirectory(at: output)
         try? fileManager.removeItem(at: output)
         try fileManager.moveItem(at: partURL, to: output)
         finished = true
+    }
+
+    /// `removeItem` deletes a directory and everything under it, and the output path is
+    /// derived from the input's own filename, so a directory that happens to sit there
+    /// is refused rather than emptied.
+    private static func requireNotDirectory(at url: URL) throws {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              isDirectory.boolValue
+        else {
+            return
+        }
+        throw DecryptorError.cannotCreateOutput(url.path)
     }
 
     private static func checkFreeSpace(for output: URL, needed: Int64) throws {
@@ -227,4 +259,24 @@ public enum Decryptor {
 /// so there is no actual sharing, but the compiler cannot see that.
 private struct RawBytes: @unchecked Sendable {
     let pointer: UnsafeMutablePointer<UInt8>
+}
+
+/// Collects the first failure seen by a chunk's parallel loop. The loop body cannot
+/// throw, so the status is carried out and checked once the chunk is done. This is the
+/// same one-way-signal shape as the app's `CancelFlag`.
+private final class FailureBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var status: CCCryptorStatus = CCCryptorStatus(kCCSuccess)
+
+    func record(_ value: CCCryptorStatus) {
+        lock.lock()
+        if status == CCCryptorStatus(kCCSuccess) { status = value }
+        lock.unlock()
+    }
+
+    var firstFailure: CCCryptorStatus? {
+        lock.lock()
+        defer { lock.unlock() }
+        return status == CCCryptorStatus(kCCSuccess) ? nil : status
+    }
 }

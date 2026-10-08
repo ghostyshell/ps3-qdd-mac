@@ -4,13 +4,13 @@ import Testing
 
 @Suite("Disc key")
 struct DiscKeyTests {
-    /// The real LittleBigPlanet (USA) v02.00 key, as stored by Redump: 32 uppercase hex
-    /// characters plus CRLF, which is what makes trailing-whitespace trimming essential
-    /// rather than cosmetic.
-    static let lbpRaw = "A1B2C3D4E5F60718293A4B5C6D7E8F90\r\n"
+    /// A synthetic key in the exact shape Redump stores one: 32 uppercase hex characters
+    /// plus CRLF, which is what makes trailing-whitespace trimming essential rather than
+    /// cosmetic. No real disc key is committed to this repository.
+    static let dkeyRaw = "A1B2C3D4E5F60718293A4B5C6D7E8F90\r\n"
 
     @Test func trimsTrailingCRLF() throws {
-        let key = try DiscKey(hex: Self.lbpRaw)
+        let key = try DiscKey(hex: Self.dkeyRaw)
         #expect(key.hex == "A1B2C3D4E5F60718293A4B5C6D7E8F90")
         #expect(key.bytes.count == 16)
     }
@@ -21,7 +21,7 @@ struct DiscKeyTests {
     }
 
     @Test func roundTripsThroughHex() throws {
-        let key = try DiscKey(hex: Self.lbpRaw)
+        let key = try DiscKey(hex: Self.dkeyRaw)
         #expect(try DiscKey(hex: key.hex) == key)
     }
 
@@ -35,8 +35,8 @@ struct DiscKeyTests {
     }
 
     @Test func rejectsNonHexadecimal() {
-        #expect(throws: DiscKeyError.notHexadecimal("A1B2C3D4E5F60718293A4B5C6D7EBCZZ")) {
-            try DiscKey(hex: "A1B2C3D4E5F60718293A4B5C6D7EBCZZ")
+        #expect(throws: DiscKeyError.notHexadecimal) {
+            try DiscKey(hex: "A1B2C3D4E5F60718293A4B5C6D7E8FZZ")
         }
     }
 

@@ -132,4 +132,28 @@ struct DecryptorTests {
             try Decryptor.scan(input: url)
         }
     }
+
+    /// `removeItem` deletes a directory and everything under it, so a directory sitting
+    /// where the output belongs is refused, and refused before any work is done.
+    @Test func refusesToReplaceADirectoryAtTheOutputPath() throws {
+        let fixture = try Self.makeFixture()
+        let directory = try Temp.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let inputURL = directory.appendingPathComponent("disc.iso")
+        try Data(fixture.encrypted).write(to: inputURL)
+        let scan = try Decryptor.scan(input: inputURL)
+
+        let outputURL = directory.appendingPathComponent("out.iso")
+        try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
+        let sentinel = outputURL.appendingPathComponent("keep-me")
+        try Data("precious".utf8).write(to: sentinel)
+
+        #expect(throws: DecryptorError.cannotCreateOutput(outputURL.path)) {
+            try Decryptor.decrypt(
+                input: inputURL, output: outputURL, key: fixture.key, scan: scan,
+                progress: { _ in }
+            )
+        }
+        #expect(FileManager.default.fileExists(atPath: sentinel.path))
+    }
 }

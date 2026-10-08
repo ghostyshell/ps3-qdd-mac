@@ -5,15 +5,18 @@ import Testing
 
 @Suite("Key store")
 struct KeyStoreTests {
-    static let lbpTitle = "LittleBigPlanet (USA) (En,Ja,Fr,De,Es,It,Nl,Pt,Sv,No,Da,Fi,Zh,Ko) (v02.00)"
-    static let lbpKey = "A1B2C3D4E5F60718293A4B5C6D7E8F90"
+    /// A real Redump title, because the alias matching has to cope with the parentheses,
+    /// commas and version tag it actually carries. The keys beside it are synthetic: no
+    /// real disc key is committed to this repository.
+    static let title = "LittleBigPlanet (USA) (En,Ja,Fr,De,Es,It,Nl,Pt,Sv,No,Da,Fi,Zh,Ko) (v02.00)"
+    static let sampleKey = "A1B2C3D4E5F60718293A4B5C6D7E8F90"
 
     @Test func loadsADirectoryOfDkeyFiles() throws {
         let directory = try Temp.makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        try Data("\(Self.lbpKey)\r\n".utf8)
-            .write(to: directory.appendingPathComponent("\(Self.lbpTitle).dkey"))
-        try Data("C44 740A631FBC7BF2CEAD118A58100C\r\n".replacingOccurrences(of: " ", with: "").utf8)
+        try Data("\(Self.sampleKey)\r\n".utf8)
+            .write(to: directory.appendingPathComponent("\(Self.title).dkey"))
+        try Data("B2C3D4E5F60718293A4B5C6D7E8F9001\r\n".utf8)
             .write(to: directory.appendingPathComponent("LittleBigPlanet (Korea).dkey"))
 
         let store = try KeyStore.load(from: directory)
@@ -22,8 +25,8 @@ struct KeyStoreTests {
 
         // The ISO filename and the .dkey filename are the same Redump title, so the
         // stem comparison has to hit.
-        let key = try #require(store.key(forISO: "\(Self.lbpTitle).iso"))
-        #expect(key.hex == Self.lbpKey)
+        let key = try #require(store.key(forISO: "\(Self.title).iso"))
+        #expect(key.hex == Self.sampleKey)
     }
 
     @Test func loadsACombinedKeysFile() throws {
@@ -32,15 +35,15 @@ struct KeyStoreTests {
         let file = directory.appendingPathComponent("keys.txt")
         let contents = """
             # title<TAB>key
-            \(Self.lbpTitle)\t\(Self.lbpKey)
+            \(Self.title)\t\(Self.sampleKey)
             LittleBigPlanet (Korea)\tB2C3D4E5F60718293A4B5C6D7E8F9001
             """
         try Data(contents.utf8).write(to: file)
 
         let store = try KeyStore.load(from: file)
         #expect(store.kind == .combinedFile)
-        let key = try #require(store.key(forISO: "\(Self.lbpTitle).iso"))
-        #expect(key.hex == Self.lbpKey)
+        let key = try #require(store.key(forISO: "\(Self.title).iso"))
+        #expect(key.hex == Self.sampleKey)
     }
 
     @Test func fallsBackToAPunctuationInsensitiveMatch() throws {
@@ -48,11 +51,11 @@ struct KeyStoreTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let file = directory.appendingPathComponent("keys.txt")
         // Differs from the ISO name only in punctuation; the tags must still line up.
-        try Data("LittleBigPlanet_USA_En,Ja,Fr,De,Es,It,Nl,Pt,Sv,No,Da,Fi,Zh,Ko_v02.00\t\(Self.lbpKey)\n".utf8)
+        try Data("LittleBigPlanet_USA_En,Ja,Fr,De,Es,It,Nl,Pt,Sv,No,Da,Fi,Zh,Ko_v02.00\t\(Self.sampleKey)\n".utf8)
             .write(to: file)
 
         let store = try KeyStore.load(from: file)
-        #expect(store.key(forISO: "\(Self.lbpTitle).iso")?.hex == Self.lbpKey)
+        #expect(store.key(forISO: "\(Self.title).iso")?.hex == Self.sampleKey)
     }
 
     /// Region and version tags are part of a disc's identity. Dropping them would hand the
@@ -65,14 +68,14 @@ struct KeyStoreTests {
             .write(to: file)
 
         let store = try KeyStore.load(from: file)
-        #expect(store.key(forISO: "\(Self.lbpTitle).iso") == nil)
+        #expect(store.key(forISO: "\(Self.title).iso") == nil)
     }
 
     @Test func returnsNilForAnUnknownTitle() throws {
         let directory = try Temp.makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let file = directory.appendingPathComponent("keys.txt")
-        try Data("\(Self.lbpTitle)\t\(Self.lbpKey)\n".utf8).write(to: file)
+        try Data("\(Self.title)\t\(Self.sampleKey)\n".utf8).write(to: file)
 
         let store = try KeyStore.load(from: file)
         #expect(store.key(forISO: "Some Other Game (USA).iso") == nil)
@@ -91,7 +94,7 @@ struct KeyStoreTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let file = directory.appendingPathComponent("keys.txt")
         try Data("Some Game\tnonsense\n".utf8).write(to: file)
-        #expect(throws: KeyStoreError.malformedLine(number: 1, text: "Some Game\tnonsense")) {
+        #expect(throws: KeyStoreError.malformedLine(number: 1)) {
             try KeyStore.load(from: file)
         }
     }
@@ -108,9 +111,9 @@ struct KeyStoreTests {
         let directory = try Temp.makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let file = directory.appendingPathComponent("keys.txt")
-        try Data("\(Self.lbpTitle) \(Self.lbpKey)\n".utf8).write(to: file)
+        try Data("\(Self.title) \(Self.sampleKey)\n".utf8).write(to: file)
 
         let store = try KeyStore.load(from: file)
-        #expect(store.key(forISO: "\(Self.lbpTitle).iso")?.hex == Self.lbpKey)
+        #expect(store.key(forISO: "\(Self.title).iso")?.hex == Self.sampleKey)
     }
 }

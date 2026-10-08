@@ -5,7 +5,7 @@ public enum AESError: Error, Equatable {
     case badKeyLength(bytes: Int)
     case badBlockLength(bytes: Int)
     case cryptorCreationFailed(status: Int32)
-    case updateFailed(status: Int32, produced: Int)
+    case updateFailed(status: Int32)
 }
 
 /// AES-128 in CBC mode with no padding.
@@ -42,7 +42,7 @@ public enum AES128CBC {
             }
         }
         guard status == CCCryptorStatus(kCCSuccess) else {
-            throw AESError.updateFailed(status: status, produced: count)
+            throw AESError.updateFailed(status: status)
         }
         return output
     }
@@ -75,7 +75,9 @@ public enum AES128CBC {
 
         var moved = 0
         let updateStatus = CCCryptorUpdate(cryptor, source, count, destination, count, &moved)
-        guard updateStatus == success, moved == count else { return updateStatus }
-        return success
+        guard updateStatus == success else { return updateStatus }
+        // A short write must not report success: the caller would copy the partly filled
+        // destination back over the ciphertext and call the sector decrypted.
+        return moved == count ? success : CCCryptorStatus(kCCDecodeError)
     }
 }

@@ -2,7 +2,9 @@ import Foundation
 
 public enum DiscKeyError: Error, Equatable {
     case wrongLength(found: Int)
-    case notHexadecimal(String)
+    /// Carries no payload on purpose. This error reaches the window and stderr, and the
+    /// text that failed to parse is often a real key with one stray character in it.
+    case notHexadecimal
 }
 
 /// The 16-byte AES key for one disc title.
@@ -35,7 +37,7 @@ public struct DiscKey: Equatable, Sendable {
         for _ in 0..<Self.byteCount {
             let next = cleaned.index(index, offsetBy: 2)
             guard let byte = UInt8(cleaned[index..<next], radix: 16) else {
-                throw DiscKeyError.notHexadecimal(cleaned)
+                throw DiscKeyError.notHexadecimal
             }
             bytes.append(byte)
             index = next

@@ -3,3 +3,8 @@
 PS3QDD.app/
 .DS_Store
 *.part
+
+# Never commit key material. prepare-keys.sh takes an arbitrary destination, so a run
+# pointed inside the repo would otherwise leave real disc keys one `git add .` away.
+keys.txt
+*.dkey

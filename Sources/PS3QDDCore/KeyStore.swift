@@ -3,7 +3,10 @@ import Foundation
 public enum KeyStoreError: Error, Equatable {
     case unsupportedSource(String)
     case noKeysFound(String)
-    case malformedLine(number: Int, text: String)
+    /// Only the line number, never the text. This error is shown in the window and
+    /// written to stderr, and a malformed line is usually a real key with a stray
+    /// character, so echoing it would put key material in the UI and in CI logs.
+    case malformedLine(number: Int)
 }
 
 /// A lookup table from disc title to AES key, loaded either from a directory of
@@ -72,7 +75,7 @@ public struct KeyStore: Sendable {
             let text = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if text.isEmpty || text.hasPrefix("#") { continue }
             guard let (title, key) = splitEntry(text) else {
-                throw KeyStoreError.malformedLine(number: offset + 1, text: text)
+                throw KeyStoreError.malformedLine(number: offset + 1)
             }
             for alias in aliases(for: title) {
                 entries[alias] = key

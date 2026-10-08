@@ -257,7 +257,9 @@ final class DecryptQueue: ObservableObject {
             job.fraction = 1
             job.bytesPerSecond = 0
             job.etaSeconds = nil
-            if shouldDeleteSource { try? FileManager.default.removeItem(at: input) }
+            if shouldDeleteSource, Self.isRegularFile(input) {
+                try? FileManager.default.removeItem(at: input)
+            }
         case .alreadyDone:
             job.state = .alreadyDone
             job.fraction = 1
@@ -297,6 +299,14 @@ final class DecryptQueue: ObservableObject {
         return folder.appendingPathComponent(name)
     }
 
+    /// `removeItem` deletes a directory and everything under it, and a folder named
+    /// `Something.iso` sorts into the image list, so the delete is restricted to files.
+    nonisolated static func isRegularFile(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return false }
+        return !isDirectory.boolValue
+    }
+
     nonisolated static func fileSize(of url: URL) -> Int64? {
         (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? Int64
     }
@@ -308,8 +318,8 @@ final class DecryptQueue: ObservableObject {
                 + "only \(ByteCountFormatter.string(fromByteCount: available, countStyle: .file)) available"
         case let KeyStoreError.noKeysFound(path):
             return "No keys found in \(path)"
-        case let KeyStoreError.malformedLine(number, text):
-            return "Line \(number) of the keys file is not a title and a 32-character key: \(text)"
+        case let KeyStoreError.malformedLine(number):
+            return "Line \(number) of the keys file is not a title and a 32-character key"
         case let KeyStoreError.unsupportedSource(path):
             return "Nothing readable at \(path)"
         case let DecryptorError.notSectorAligned(bytes):
@@ -322,6 +332,8 @@ final class DecryptQueue: ObservableObject {
             return "Write failed at byte \(offset) (code \(code))"
         case let DecryptorError.shortRead(offset):
             return "Unexpected end of file at byte \(offset)"
+        case let DecryptorError.decryptionFailed(status):
+            return "The decryption engine failed (code \(status))"
         case DecryptorError.cancelled:
             return "Stopped"
         case let DecryptorError.cannotCreateOutput(path):
