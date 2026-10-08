@@ -6,6 +6,7 @@ public enum DecryptorError: Error, Equatable {
     case notSectorAligned(bytes: Int64)
     case notAPS3Image
     case cannotCreateOutput(String)
+    case cannotReplaceOutput(path: String, code: Int32)
     case shortRead(offset: Int64)
     case writeFailed(offset: Int64, code: Int32)
     case insufficientSpace(needed: Int64, available: Int64)
@@ -199,7 +200,9 @@ public enum Decryptor {
             do {
                 try outHandle.write(contentsOf: buffer)
             } catch {
-                throw DecryptorError.writeFailed(offset: chunkOffset, code: 0)
+                // The underlying errno is the whole diagnosis here, most often a full
+                // disk, so it is carried through rather than replaced with a zero.
+                throw DecryptorError.writeFailed(offset: chunkOffset, code: Int32((error as NSError).code))
             }
 
             bytesDone += Int64(byteCount)
@@ -226,9 +229,13 @@ public enum Decryptor {
         try inHandle.close()
         inOpen = false
 
-        try requireNotDirectory(at: output)
-        try? fileManager.removeItem(at: output)
-        try fileManager.moveItem(at: partURL, to: output)
+        // rename(2) swaps the finished part file into place atomically, so a crash can
+        // never leave the output path holding neither the previous file nor the new one.
+        // It also refuses a directory at the destination rather than deleting the tree,
+        // which is the backstop for `requireNotDirectory` having passed long ago.
+        guard rename(partURL.path, output.path) == 0 else {
+            throw DecryptorError.cannotReplaceOutput(path: output.path, code: errno)
+        }
         finished = true
     }
 
@@ -252,6 +259,35 @@ public enum Decryptor {
         guard available >= needed else {
             throw DecryptorError.insufficientSpace(needed: needed, available: available)
         }
+    }
+
+    /// Whether `output` is byte-identical to `input` across the start of the first
+    /// encrypted region. A copy of the encrypted image matches there; a real decrypt
+    /// cannot, because AES output does not match its own ciphertext.
+    ///
+    /// The byte count alone cannot tell a finished output from a copy of the source, and
+    /// the copy is the common case when someone puts their encrypted dumps in the same
+    /// folder they are writing to, so the size check is not enough on its own.
+    public static func matchesSource(at output: URL, input: URL, scan: DiscScan) -> Bool {
+        guard let region = scan.encrypted.first else { return false }
+        let offset = UInt64(region.start * RegionMap.sectorSize)
+        let available = region.count * RegionMap.sectorSize
+        let sample = min(4096, available)
+        guard sample > 0,
+              let a = try? read(from: output, at: offset, count: sample),
+              let b = try? read(from: input, at: offset, count: sample),
+              a.count == sample, b.count == sample
+        else {
+            return false
+        }
+        return a == b
+    }
+
+    private static func read(from url: URL, at offset: UInt64, count: Int) throws -> [UInt8] {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        try handle.seek(toOffset: offset)
+        return [UInt8](try handle.read(upToCount: count) ?? Data())
     }
 }
 

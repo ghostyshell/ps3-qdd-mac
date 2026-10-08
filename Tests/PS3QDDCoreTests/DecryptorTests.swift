@@ -156,4 +156,36 @@ struct DecryptorTests {
         }
         #expect(FileManager.default.fileExists(atPath: sentinel.path))
     }
+
+    /// A copy of the encrypted source is the same size as a finished output, so the size
+    /// alone cannot be trusted. The bytes inside the first encrypted region tell them
+    /// apart: AES output never matches its own ciphertext.
+    @Test func tellsACopyOfTheSourceFromAFinishedOutput() throws {
+        let fixture = try Self.makeFixture()
+        let directory = try Temp.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let inputURL = directory.appendingPathComponent("disc.iso")
+        try Data(fixture.encrypted).write(to: inputURL)
+        let scan = try Decryptor.scan(input: inputURL)
+        #expect(!scan.encrypted.isEmpty)
+
+        // A copy of the encrypted source: same size, same bytes where it matters.
+        let copyURL = directory.appendingPathComponent("copy.iso")
+        try Data(fixture.encrypted).write(to: copyURL)
+        #expect(Decryptor.matchesSource(at: copyURL, input: inputURL, scan: scan))
+
+        // The plaintext is what a real decrypt looks like: same size, different bytes.
+        let decryptedURL = directory.appendingPathComponent("decrypted.iso")
+        try Data(fixture.plain).write(to: decryptedURL)
+        #expect(Self.fileSizesMatch(decryptedURL, copyURL))
+        #expect(!Decryptor.matchesSource(at: decryptedURL, input: inputURL, scan: scan))
+    }
+
+    static func fileSizesMatch(_ a: URL, _ b: URL) -> Bool {
+        let attributes: (URL) -> Int64? = {
+            (try? FileManager.default.attributesOfItem(atPath: $0.path)[.size]) as? Int64
+        }
+        return attributes(a) == attributes(b)
+    }
 }

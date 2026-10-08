@@ -26,9 +26,11 @@ CommonCrypto, cross-checked against
 - **Batch with live progress.** Pick a folder of ISOs and every file gets a row with a
   progress bar, percentage, throughput and ETA, plus its own Stop button.
 - **It will not corrupt your files.** Every image's region map is validated before it is
-  queued, so an already-decrypted ISO or a JB folder is reported as skipped instead of
-  being silently mangled. Output goes to a `.part` file and is renamed only on success,
-  free space is checked first, and the source is deleted only after a clean finish.
+  queued, so an extracted game folder, or a file that is not a PS3 image at all, is
+  reported as skipped rather than fed to the engine. Output is built as a `.part` file and
+  swapped into place atomically, free space is checked first, and the source is deleted
+  only after a run that ended without an I/O error. Two things this cannot detect are in
+  the limits below.
 - **Keys never leave your Mac and are never bundled.** The app reads them from wherever
   you point it. Nothing is written into the repo or the app bundle.
 
@@ -129,6 +131,14 @@ header only appears if the key and the IV scheme are both right.
 
 ## Notes and limits
 
+- **An already-decrypted image is not detected.** Region 0 is a plain region, so it
+  survives decryption untouched and a decrypted image still carries a valid region map.
+  It will be queued and decrypted a second time, which mangles it. Point the app at
+  encrypted dumps, and not at a folder that already holds decrypted images.
+- **A wrong key is not detected either.** There is no integrity check in the disc format,
+  so a mismatched key produces a corrupt image rather than an error, and the
+  delete-original option would then remove the encrypted source. Leave that option off
+  unless you trust your key set.
 - **Decrypt only.** The Windows tool can re-encrypt; this does not.
 - **One image at a time.** Jobs run sequentially, because a single disc already saturates
   the disk.

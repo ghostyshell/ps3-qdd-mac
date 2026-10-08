@@ -3,7 +3,7 @@
 #
 #   ./run.sh              build the app bundle and launch it
 #   ./run.sh --decrypt <input.iso> <keys> <output-dir>
-#                         run headlessly, without building or opening a window
+#                         run headlessly, without opening a window (still builds first)
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

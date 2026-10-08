@@ -66,6 +66,9 @@ final class DecryptQueue: ObservableObject {
         }
 
         func apply(_ progress: DecryptProgress) {
+            // A report can arrive after the job already finished, and clearing the rate
+            // and ETA for a done row is friendlier than putting them back.
+            guard state == .running else { return }
             fraction = progress.fraction
             bytesPerSecond = progress.bytesPerSecond
             etaSeconds = progress.etaSeconds
@@ -86,6 +89,10 @@ final class DecryptQueue: ObservableObject {
     private var keyStore: KeyStore?
     private var prepareTask: Task<Void, Never>?
     private var runner: Task<Void, Never>?
+
+    /// The job being decrypted right now. Re-scanning the folder drops it from `jobs`,
+    /// and without this reference its stop flag would become unreachable.
+    private var runningJob: Job?
 
     init() {
         // The keys file that scripts/prepare-keys.sh writes, if it is already there.
@@ -202,6 +209,7 @@ final class DecryptQueue: ObservableObject {
 
     func stopAll() {
         for job in jobs { job.cancelFlag.cancel() }
+        runningJob?.cancelFlag.cancel()
     }
 
     private func runAll() async {
@@ -220,6 +228,8 @@ final class DecryptQueue: ObservableObject {
 
         job.state = .running
         job.fraction = 0
+        runningJob = job
+        defer { runningJob = nil }
 
         let input = job.url
         let output = job.outputURL
@@ -228,8 +238,10 @@ final class DecryptQueue: ObservableObject {
 
         let outcome: Outcome = await Task.detached(priority: .userInitiated) {
             // A finished output of the full expected size means an earlier run already
-            // did this one.
-            if Self.fileSize(of: output) == scan.totalBytes {
+            // did this one, but a copy of the encrypted source is the same size, so the
+            // bytes are held against the source before the job is called done.
+            if Self.fileSize(of: output) == scan.totalBytes,
+               !Decryptor.matchesSource(at: output, input: input, scan: scan) {
                 return .alreadyDone
             }
             do {
@@ -330,6 +342,8 @@ final class DecryptQueue: ObservableObject {
             return "Could not read the first sector"
         case let DecryptorError.writeFailed(offset, code):
             return "Write failed at byte \(offset) (code \(code))"
+        case let DecryptorError.cannotReplaceOutput(path, code):
+            return "Could not put the finished file at \(path) (error \(code))"
         case let DecryptorError.shortRead(offset):
             return "Unexpected end of file at byte \(offset)"
         case let DecryptorError.decryptionFailed(status):

@@ -33,7 +33,12 @@ Native macOS decryptor for Redump PS3 disc images. See `README.md` for what it d
   discs. A wrong key produces a corrupt image rather than an error, so the lookup in
   `KeyStore.aliases` deliberately keeps them.
 - **Validate before queueing.** A file without a valid region map must be skipped, never
-  handed to the engine, or an already-decrypted image gets mangled in place.
+  handed to the engine. Be clear about what that does not catch: region 0 is plain and
+  survives decryption, so an already-decrypted image still carries a valid map and *will*
+  be queued. Only an extracted folder or a non-PS3 file is filtered out this way.
+- **A wrong key is silent.** There is no integrity check in the format, so a mismatched
+  key yields a corrupt image and no error. That is why deleting the source is the one
+  irreversible step in the app.
 - **Hold the region map against the real file length.** Its boundaries are 32-bit values
   read straight out of the file, so `Decryptor.scan` bounds them against the sector count.
   `DiscScan.init` is deliberately not public for the same reason.
