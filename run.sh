@@ -30,9 +30,13 @@ if [ "${1:-}" = "--decrypt" ]; then
     exec "$BIN" "$@"
 fi
 
+ICON="$ROOT/Resources/AppIcon.icns"
+[ -f "$ICON" ] || die "no icon at $ICON; build it with: swift scripts/make-icon.swift $ICON"
+
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/PS3QDD"
+cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -43,6 +47,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<key>CFBundleDisplayName</key><string>PS3 Quick Disc Decryptor</string>
 	<key>CFBundleExecutable</key><string>PS3QDD</string>
 	<key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>$VERSION</string>
 	<key>CFBundleVersion</key><string>$VERSION</string>

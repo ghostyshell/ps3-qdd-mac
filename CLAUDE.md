@@ -9,6 +9,8 @@ Native macOS decryptor for Redump PS3 disc images. See `README.md` for what it d
 - `Sources/PS3QDD` - the SwiftUI app and the `--decrypt` headless entry point.
 - `Tests/PS3QDDCoreTests` - Swift Testing suites.
 - `scripts/prepare-keys.sh` - builds `keys.txt` from a Redump `.dkey` archive.
+- `scripts/make-icon.swift` - draws `Resources/AppIcon.icns`. The .icns is committed, so
+  this only runs when the artwork changes.
 - `run.sh` - builds `PS3QDD.app`, signs it and opens it.
 
 ## Toolchain constraints, both load-bearing
